@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
 using System.Net.Http;
@@ -10,6 +11,7 @@ namespace Stapler.Client
         private static string _path;
         private static string _args;
         private const string UrlFormat = "http://localhost:13711/{0}/";
+        private const string UnityExecutable = @"C:\Program Files (x86)\Unity\Editor\Unity.exe";
 
         public static string Base64Encode(string plainText)
         {
@@ -28,28 +30,38 @@ namespace Stapler.Client
             _args = args[1];
             var t = new Task(SendOrLaunchUnity);
             t.Start();
-
-            Console.ReadLine();
+            t.Wait();
         }
 
         static async void SendOrLaunchUnity()
         {
             var unityStylePath = _path.Replace("\\", "/").TrimEnd('/');
             var encodedPath = Base64Encode(unityStylePath);
-            var url = string.Format(UrlFormat, encodedPath); 
+            var url = string.Format(UrlFormat, encodedPath);
 
             using (var client = new HttpClient())
-            using (var response = await client.PostAsync(url, new StringContent(_args)))
             {
-                if (response.IsSuccessStatusCode)
+                try
                 {
-                    await HandleResponse(response);
+                    using (var response = await client.PostAsync(url, new StringContent(_args)))
+                    {
+                        if (response.IsSuccessStatusCode)
+                        {
+                            await HandleResponse(response);
+                        }
+                        else
+                        {
+                            Console.WriteLine("Got error. Invoking Unity: {0}", response.StatusCode);
+                            InvokeUnity();
+                        }
+                    }
                 }
-                else
+                catch (Exception)
                 {
-                    Console.WriteLine("Run batchmode? {0}", response.StatusCode);
+                    Console.WriteLine("No response. Invoking Unity: {0}");
                     InvokeUnity();
                 }
+
             }
         }
 
@@ -68,7 +80,7 @@ namespace Stapler.Client
 
         private static void InvokeUnity()
         {
-            // TODO: run batchmode? keep unity running?
+            Process.Start(UnityExecutable, string.Format("-batchMode -executeMethod {0}", _args)); // TODO: args
         }
     }
 

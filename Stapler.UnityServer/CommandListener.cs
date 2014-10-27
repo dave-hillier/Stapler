@@ -8,6 +8,14 @@ using UnityEngine;
 
 namespace Stapler.UnityServer
 {
+    public class Test
+    {
+        public static void Method()
+        {
+            Debug.Log("Test method");
+        }
+    }
+
     [InitializeOnLoad]
     class CommandListener
     {
