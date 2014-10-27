@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stapler.Client", "Stapler.Client\Stapler.Client.csproj", "{ABAE9E9C-5FFC-477D-A67F-87D0209F9CF0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stapler.UnityServer", "Stapler.UnityServer\Stapler.UnityServer.csproj", "{CC609297-BF7C-40DD-9497-E6F0ABF52E07}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ABAE9E9C-5FFC-477D-A67F-87D0209F9CF0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ABAE9E9C-5FFC-477D-A67F-87D0209F9CF0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ABAE9E9C-5FFC-477D-A67F-87D0209F9CF0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ABAE9E9C-5FFC-477D-A67F-87D0209F9CF0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CC609297-BF7C-40DD-9497-E6F0ABF52E07}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CC609297-BF7C-40DD-9497-E6F0ABF52E07}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CC609297-BF7C-40DD-9497-E6F0ABF52E07}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CC609297-BF7C-40DD-9497-E6F0ABF52E07}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
