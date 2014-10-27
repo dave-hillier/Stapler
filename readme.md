@@ -3,6 +3,7 @@ Thin client and server for Unity inspired by Nailgun
 ## Usage
 
 Copy Stapler.UnityServer.dll to your Editor folder in your Unity project
+
 Invoke the client with your projects asset folder name
 
 ##Status
@@ -11,6 +12,6 @@ Invoke the client with your projects asset folder name
 
 ##To do
 
-- [ ] Actually do the command in Unity
+- [ ] Actually invoke the command in Unity
 - [ ] Launch unity if its not running
 - [ ] Capture log files
