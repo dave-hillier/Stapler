@@ -11,6 +11,10 @@ This project is still at concept stage; it is untested and has not been used out
 
 #Usage
 
+On first usage with a project ensure that Unity is not running so that it can copy the required plugin.
+
+For a description of the above arguments see [Unity Command Line Arguments](http://docs.unity3d.com/Manual/CommandLineArguments.html)
+
 **Required arguments:**
 ```
 -projectPath <path to project>
@@ -26,9 +30,9 @@ Note: the following arguments are ignored if Unity is already running.
 -logFile <log file name>
 ```
 
-For a description of the above arguments see [Unity Command Line Arguments](http://docs.unity3d.com/Manual/CommandLineArguments.html)
+**Example:**
 
-Example: 
-
-`Stapler.Client -projectPath "C:\My Project" -executeMethod ClassName.MethodName`
+```
+Stapler.Client -projectPath "C:\My Project" -executeMethod ClassName.MethodName
+```
 
