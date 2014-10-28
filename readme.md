@@ -11,14 +11,14 @@ This project is still at concept stage; it is untested and has not been used out
 
 #Usage
 
-On first usage with a project ensure that Unity is not running so that it can copy the required plugin.
+On first usage with a project ensure that Unity is not running so that Stapler can copy the required plugin.
 
 For a description of the above arguments see [Unity Command Line Arguments](http://docs.unity3d.com/Manual/CommandLineArguments.html)
 
 **Required arguments:**
 ```
 -projectPath <path to project>
--executeMethod <Class.StaticMethodToInvoke
+-executeMethod <Class.StaticMethodToInvoke>
 ```
 **Optional:**
 
