@@ -31,6 +31,7 @@ namespace Stapler.Client
             var t = new Task(SendOrLaunchUnity);
             t.Start();
             t.Wait();
+            Console.ReadLine();
         }
 
         static async void SendOrLaunchUnity()

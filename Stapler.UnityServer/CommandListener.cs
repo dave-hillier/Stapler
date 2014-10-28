@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using UnityEditor;
@@ -64,7 +66,24 @@ namespace Stapler.UnityServer
                         var istream = ctx.Request.InputStream;
                         using (var read = new StreamReader(istream))
                         {
-                            Debug.Log(read.ReadToEnd());
+                            var fqmn = read.ReadToEnd();
+                            var parts = fqmn.Split('.');
+                            var typeName = string.Join(".", parts.Take(parts.Length - 1).ToArray());
+
+                            Debug.Log("Finding " + typeName);
+
+                            var type = (from asm in AppDomain.CurrentDomain.GetAssemblies()
+                                       let ype = asm.GetType(typeName)
+                                       where ype != null
+                                       select ype).SingleOrDefault();
+                            if (type != null)
+                            {
+                                var methodName = parts.Last();
+                                Debug.Log("Invoking " + methodName);
+                                var method = type.GetMethod(methodName);
+                                method.Invoke(null, null);
+                            }
+                            
                         }
                         const string responseString = "<html><body>Acknowledge</body></html>";
                         WriteResponseString(response, output, responseString);
