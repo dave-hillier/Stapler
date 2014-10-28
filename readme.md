@@ -1,4 +1,4 @@
-Thin client and server for Unity inspired by [Nailgun](http://www.martiansoftware.com/nailgun/)
+Thin client and server for [Unity](http://unity3d.com) inspired by [Nailgun](http://www.martiansoftware.com/nailgun/)
 
 Stapler is designed to solve the problem that you cannot run a command line build while the editor has the project running.
 
