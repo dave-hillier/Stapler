@@ -11,12 +11,12 @@ This project is still at concept stage; it is untested and has not been used out
 
 #Usage
 
-##Required arguments:
+**Required arguments:**
 ```
 -projectPath <path to project>
 -executeMethod <Class.StaticMethodToInvoke
 ```
-## Optional:
+**Optional:**
 
 Note: the following arguments are ignored if Unity is already running. 
 ```
