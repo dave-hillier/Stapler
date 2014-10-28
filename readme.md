@@ -9,10 +9,10 @@ Thin client and server for Unity inspired by Nailgun
 
 - [x] Partial proof of concept communicating with Unity via HTTP
 - [x] Launch unity if its not running
+- [x] Actually invoke the command in Unity
 
 ##To do
 
-- [ ] Actually invoke the command in Unity
 - [ ] Capture log files
 - [ ] Keep Unity running and add command for close?
 - [ ] Run a server for each project
