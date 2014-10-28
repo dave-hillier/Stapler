@@ -139,7 +139,6 @@ namespace Stapler.Client
 
         private static void InvokeUnity()
         {
-            // TODO: ensure that the server dll is in the Unity Editor folder
             var args = string.Join(" ", UnityOptions().ToArray());
             Console.WriteLine("{0} {1}", UnityExecutable, args);
             Process.Start(UnityExecutable, args);
