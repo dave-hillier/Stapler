@@ -1,20 +1,34 @@
 Thin client and server for Unity inspired by Nailgun
 
-## Usage
+Stapler is designed to solve the problem that you cannot run a command line build while the editor has the project running.
 
-- Copy Stapler.UnityServer.dll to your Editor folder in your Unity project
-- Invoke the client with your projects asset folder name
+It does this by providing a server and client. The server is a Unity Editor plugin that will invoke a method specified in a HTTP post. 
+The client will check to see if the project is opened. If it is, it will make the HTTP call, otherwise it will start a new instance of Unity with the specified parameters. 
 
-##Status
+#Status
 
-- [x] Partial proof of concept communicating with Unity via HTTP
-- [x] Launch unity if its not running
-- [x] Actually invoke the command in Unity
+This project is still at concept stage; it is untested and has not been used outside of basic tests.
 
-##To do
+#Usage
 
-- [ ] Capture log files
-- [ ] Keep Unity running and add command for close?
-- [ ] Run a server for each project/figure out what we can use as a project
-- [ ] Unity Threading
-- [ ] Arguments
+##Required arguments:
+```
+-projectPath <path to project>
+-executeMethod <Class.StaticMethodToInvoke
+```
+## Optional:
+
+Note: the following arguments are ignored if Unity is already running. 
+```
+-batchmode
+-quit
+-nographics
+-logFile <log file name>
+```
+
+For a description of the above arguments see [Unity Command Line Arguments](http://docs.unity3d.com/Manual/CommandLineArguments.html)
+
+Example: 
+
+`Stapler.Client -projectPath "C:\My Project" -executeMethod ClassName.MethodName`
+
