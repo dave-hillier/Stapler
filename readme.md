@@ -15,5 +15,6 @@ Thin client and server for Unity inspired by Nailgun
 
 - [ ] Capture log files
 - [ ] Keep Unity running and add command for close?
-- [ ] Run a server for each project
+- [ ] Run a server for each project/figure out what we can use as a project
 - [ ] Unity Threading
+- [ ] Arguments
