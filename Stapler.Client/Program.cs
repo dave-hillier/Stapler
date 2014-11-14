@@ -22,6 +22,7 @@ namespace Stapler.Client
         private const string UrlFormat = "http://localhost:13711/{0}/";
         private const string UnityExecutable = @"C:\Program Files (x86)\Unity\Editor\Unity.exe";
 
+
         public static string Base64Encode(string plainText)
         {
             var plainTextBytes = Encoding.UTF8.GetBytes(plainText);
@@ -61,30 +62,30 @@ namespace Stapler.Client
                 Console.WriteLine("executeMethod projectPath are both required.");
                 return;
             }
-            var t = new Task(SendOrLaunchUnity);
-            t.Start();
-            Console.WriteLine("Enter to exit...");
-            Console.ReadLine();
+
+            var t = Task.Factory.StartNew(() => SendOrLaunchUnity());
+            Console.WriteLine(t.Result);
+
+            //Console.WriteLine("Enter to exit...");
+            //Console.ReadLine();
         }
 
-        static async void SendOrLaunchUnity()
+        static async Task<bool> SendOrLaunchUnity()
         {
+            EnsureServerDllExists();
+
             var lockFilePath = Path.Combine(Path.Combine(_projectPath, "Temp"), "UnityLockfile");
             if (!File.Exists(lockFilePath))
             {
-                EnsureServerDllExists();
-                InvokeUnity();
+                return InvokeUnity();
             }
-            else
-            {
-                await PostMethodToInvokeToServer();
-            }
+            return await PostMethodToInvokeToServer();
         }
 
         private static void EnsureServerDllExists()
         {
             const string dll = "Stapler.UnityServer.dll";
-            if (File.Exists(dll))
+            if (File.Exists(dll)) // TODO: timestamp check
             {
                 var editorFolder = Path.Combine(Path.Combine(_projectPath, "Assets"), "Editor");
                 File.Copy(dll, editorFolder, true);
@@ -95,7 +96,7 @@ namespace Stapler.Client
             }
         }
 
-        private static async Task PostMethodToInvokeToServer()
+        private static async Task<bool> PostMethodToInvokeToServer()
         {
             var unityStylePath = _projectPath.Replace("\\", "/").TrimEnd('/');
             var encodedPath = Base64Encode(unityStylePath);
@@ -109,13 +110,10 @@ namespace Stapler.Client
                     {
                         if (response.IsSuccessStatusCode)
                         {
-                            await HandleResponse(response);
+                            return await HandleResponse(response);
                         }
-                        else
-                        {
-                            Console.WriteLine("Error attempting to contact Stapler Server: {0}", response.StatusCode);
-                            InvokeUnity();
-                        }
+                        Console.WriteLine("Error attempting to contact Stapler Server: {0}", response.StatusCode);
+                        return InvokeUnity();
                     }
                 }
                 catch (Exception ex)
@@ -123,9 +121,10 @@ namespace Stapler.Client
                     Console.WriteLine("Exception attempting to contact Stapler Server: {0}", ex);
                 }
             }
+            return false;
         }
 
-        private static async Task HandleResponse(HttpResponseMessage response)
+        private static async Task<bool> HandleResponse(HttpResponseMessage response)
         {
             using (var content = response.Content)
             {
@@ -133,15 +132,18 @@ namespace Stapler.Client
                 if (result != null)
                 {
                     Console.WriteLine(result);
+                    return true;
                 }
             }
+            return false;
         }
 
-        private static void InvokeUnity()
+        private static bool InvokeUnity()
         {
             var args = string.Join(" ", UnityOptions().ToArray());
             Console.WriteLine("{0} {1}", UnityExecutable, args);
             Process.Start(UnityExecutable, args);
+            return true;
         }
     }
 

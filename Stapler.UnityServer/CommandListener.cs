@@ -14,8 +14,20 @@ namespace Stapler.UnityServer
     class CommandListener
     {
         private static readonly HttpListener Listener = new HttpListener();
-        private static readonly Queue<string> InvokeQueue = new Queue<string>(); 
+        private static readonly Queue<string> InvokeQueue = new Queue<string>();
+        private static readonly List<LogEntry> LogMessages = new List<LogEntry>(); 
+        private static readonly AutoResetEvent Evt = new AutoResetEvent(false);
+        private struct LogEntry
+        {
+            public string Condition;
+            public string Stacktrace;
+            public LogType Type;
 
+            public override string ToString()
+            {
+                return string.Format("{0}: {1}", Type, Condition);
+            }
+        }
         static CommandListener()
         {
             StartServer();
@@ -29,9 +41,19 @@ namespace Stapler.UnityServer
                 if (InvokeQueue.Count > 0)
                 {
                     var method = InvokeQueue.Dequeue();
+
+                    Application.RegisterLogCallback(HandleLog);
                     InvokeMethodFromName(method);
+                    Application.RegisterLogCallback(null);
+
+                    Evt.Set();
                 }
-            }        
+            }
+        }
+
+        private static void HandleLog(string condition, string stacktrace, LogType type)
+        {
+            LogMessages.Add(new LogEntry { Condition = condition, Stacktrace = stacktrace, Type = type });
         }
 
         public static string Base64Encode(string plainText)
@@ -81,7 +103,10 @@ namespace Stapler.UnityServer
                                 InvokeQueue.Enqueue(fullyQualifiedTypeAndMethodName);
                             }
                         }
-                        const string responseString = "<html><body>Queued</body></html>";
+                        Evt.WaitOne();
+                        string responseString = "<html><body>" +
+                            string.Join("\n", LogMessages.Select(m => m.ToString()).ToArray())
+                            +"</body></html>";
                         WriteResponseString(response, output, responseString);
                         break;
                 }
