@@ -13,10 +13,11 @@ namespace Stapler.UnityServer
     [InitializeOnLoad]
     class CommandListener
     {
-        private static readonly HttpListener Listener = new HttpListener();
+        private static HttpListener _listener;
         private static readonly Queue<string> InvokeQueue = new Queue<string>();
         private static readonly List<LogEntry> LogMessages = new List<LogEntry>(); 
         private static readonly AutoResetEvent Evt = new AutoResetEvent(false);
+
         private struct LogEntry
         {
             public string Condition;
@@ -28,14 +29,21 @@ namespace Stapler.UnityServer
                 return string.Format("{0}: {1}", Type, Condition);
             }
         }
+
         static CommandListener()
         {
-            StartServer();
+            
             EditorApplication.update += ProcessWorkQueue;
         }
 
         static void ProcessWorkQueue()
         {
+            if (_listener == null) // Wait to initialize the listener so that we're loaded?
+            {
+                _listener = new HttpListener();
+                StartServer();
+            }
+
             lock (InvokeQueue)
             {
                 if (InvokeQueue.Count > 0)
@@ -49,6 +57,7 @@ namespace Stapler.UnityServer
 
         private static void InvokeWithLogHandler(string method)
         {
+            LogMessages.Clear();
             Application.RegisterLogCallback(HandleLog);
             InvokeMethodFromName(method);
             Application.RegisterLogCallback(null);
@@ -56,6 +65,7 @@ namespace Stapler.UnityServer
 
         private static void HandleLog(string condition, string stacktrace, LogType type)
         {
+            
             LogMessages.Add(new LogEntry { Condition = condition, Stacktrace = stacktrace, Type = type });
         }
 
@@ -70,14 +80,14 @@ namespace Stapler.UnityServer
             var plainText = Path.GetDirectoryName(Application.dataPath);
             string prefix = string.Format("http://*:13711/{0}/", Base64Encode(plainText));
             Debug.Log(string.Format("Starting Listener: {0} for \"{1}\"", prefix, plainText));
-            Listener.Prefixes.Add(prefix);
-            Listener.Start();
+            _listener.Prefixes.Add(prefix);
+            _listener.Start();
 
             ThreadPool.QueueUserWorkItem(o =>
                 {
-                    while (Listener.IsListening)
+                    while (_listener.IsListening)
                     {
-                        ThreadPool.QueueUserWorkItem(HandleRequest, Listener.GetContext());
+                        ThreadPool.QueueUserWorkItem(HandleRequest, _listener.GetContext());
                     }
                 });
         }
@@ -107,9 +117,11 @@ namespace Stapler.UnityServer
                             }
                         }
                         Evt.WaitOne();
+                        
                         string responseString = "<html><body>" +
                             string.Join("\n", LogMessages.Select(m => m.ToString()).ToArray())
                             +"</body></html>";
+                        Debug.LogWarning("responseString: " + responseString);
                         WriteResponseString(response, output, responseString);
                         break;
                 }
