@@ -49,10 +49,10 @@ namespace Stapler.Client
                 yield return "-nographics";
             if (!string.IsNullOrEmpty(_projectPath))
                 yield return "-projectPath \"" + _projectPath + "\"";
-            if (!string.IsNullOrEmpty(_executeMethod))
-                yield return "-executeMethod " + _executeMethod;
             if (!string.IsNullOrEmpty(_logFile))
                 yield return "-logFile " + _logFile;
+            //if (!string.IsNullOrEmpty(_executeMethod))
+            //    yield return "-executeMethod " + _executeMethod;
         }
         static void Main(string[] args)
         {
@@ -84,16 +84,22 @@ namespace Stapler.Client
 
         private static void EnsureServerDllExists()
         {
+            var editorFolder = Path.Combine(Path.Combine(_projectPath, "Assets"), "Editor");
             const string dll = "Stapler.UnityServer.dll";
-            if (File.Exists(dll)) // TODO: timestamp check
+            if (File.Exists(dll) && IsNewerThanDestination(dll, editorFolder))
             {
-                var editorFolder = Path.Combine(Path.Combine(_projectPath, "Assets"), "Editor");
-                File.Copy(dll, editorFolder, true);
+                File.Copy(dll, editorFolder, 
+                    true);
             }
             else
             {
                 Console.WriteLine("Stapler.UnityServer.dll missing. Not copying to Assets\\Editor.");
             }
+        }
+
+        private static bool IsNewerThanDestination(string dll, string destFolder)
+        {
+            return File.GetLastWriteTimeUtc(dll) > File.GetLastWriteTimeUtc(Path.Combine(destFolder, dll));
         }
 
         private static async Task<bool> PostMethodToInvokeToServer()

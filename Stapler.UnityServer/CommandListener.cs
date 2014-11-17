@@ -40,15 +40,18 @@ namespace Stapler.UnityServer
             {
                 if (InvokeQueue.Count > 0)
                 {
-                    var method = InvokeQueue.Dequeue();
-
-                    Application.RegisterLogCallback(HandleLog);
-                    InvokeMethodFromName(method);
-                    Application.RegisterLogCallback(null);
-
+                    var method = InvokeQueue.Dequeue();  
+                    InvokeWithLogHandler(method);
                     Evt.Set();
                 }
             }
+        }
+
+        private static void InvokeWithLogHandler(string method)
+        {
+            Application.RegisterLogCallback(HandleLog);
+            InvokeMethodFromName(method);
+            Application.RegisterLogCallback(null);
         }
 
         private static void HandleLog(string condition, string stacktrace, LogType type)
