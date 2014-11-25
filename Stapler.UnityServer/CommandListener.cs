@@ -17,6 +17,7 @@ namespace Stapler.UnityServer
         private static readonly Queue<string> InvokeQueue = new Queue<string>();
         private static readonly List<LogEntry> LogMessages = new List<LogEntry>(); 
         private static readonly AutoResetEvent Evt = new AutoResetEvent(false);
+        private static bool _quit;
 
         private struct LogEntry
         {
@@ -32,7 +33,7 @@ namespace Stapler.UnityServer
 
         public static void Quit()
         {
-            EditorApplication.Exit(0);
+            _quit = true;
         }
 
         static CommandListener()
@@ -56,6 +57,10 @@ namespace Stapler.UnityServer
                     var method = InvokeQueue.Dequeue();  
                     InvokeWithLogHandler(method);
                     Evt.Set();
+                }
+                if (_quit)
+                {
+                    EditorApplication.Exit(0);
                 }
             }
         }
