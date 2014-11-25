@@ -88,13 +88,40 @@ namespace Stapler.Client
                 Console.Error.WriteLine("Failed");
         }
 
+        private static bool IsFileLocked(FileInfo file)
+        {
+            FileStream stream = null;
+
+            try
+            {
+                stream = file.Open(FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException)
+            {
+                //the file is unavailable because it is:
+                //still being written to
+                //or being processed by another thread
+                //or does not exist (has already been processed)
+                return true;
+            }
+            finally
+            {
+                if (stream != null)
+                    stream.Close();
+            }
+
+            //file is not locked
+            return false;
+        }
+
         private static async Task<bool> SendOrLaunchUnity()
         {
-            if (!File.Exists(LockFilePath))
+            if (!File.Exists(LockFilePath) || !IsFileLocked(new FileInfo(LockFilePath)))
             {
                 Console.WriteLine("UnityLockfile not found. Running Unity...");
                 StartUnity();
             }
+
             bool result = await PostMethodToInvokeToServer(_executeMethod);
 
             if (_quit)
@@ -148,7 +175,7 @@ namespace Stapler.Client
             string editorFolder = Path.Combine(Path.Combine(_projectPath, "Assets"), "Editor");
             const string dll = "Stapler.UnityServer.dll";
             string destination = Path.Combine(editorFolder, dll);
-            if (File.Exists(dll) && IsNewerThanDestination(dll, destination))
+            if (!File.Exists(dll) || IsNewerThanDestination(dll, destination))
             {
                 Directory.CreateDirectory(editorFolder);
                 Console.WriteLine("Updating {0} at {1}...", dll, destination);
@@ -156,7 +183,7 @@ namespace Stapler.Client
             }
             else
             {
-                Console.WriteLine("Stapler.UnityServer.dll missing. Not copying to Assets\\Editor.");
+                Console.WriteLine("Stapler.UnityServer.dll exists. Not copying to Assets\\Editor.");
             }
         }
 
