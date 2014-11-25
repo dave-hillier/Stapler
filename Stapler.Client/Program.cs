@@ -4,7 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Stapler.Client
@@ -119,7 +121,7 @@ namespace Stapler.Client
             if (!File.Exists(LockFilePath) || !IsFileLocked(new FileInfo(LockFilePath)))
             {
                 Console.WriteLine("UnityLockfile not found. Running Unity...");
-                StartUnity();
+                await StartUnity();
             }
 
             bool result = await PostMethodToInvokeToServer(_executeMethod);
@@ -133,15 +135,16 @@ namespace Stapler.Client
             return result;
         }
 
-        private static void StartUnity()
+        private static async Task StartUnity()
         {
             EnsureServerDllExists();
             InvokeUnity();
-            BlockUntilUnityStarted();
+            await BlockUntilUnityStarted();
         }
 
-        private static async void BlockUntilUnityStarted()
+        private static async Task BlockUntilUnityStarted()
         {
+            Console.WriteLine("Waiting for unity to start...");
             int errorCount = 0;
             bool successfulResponse = false;
             do
@@ -150,6 +153,7 @@ namespace Stapler.Client
                 {
                     using (var client = new HttpClient())
                     {
+                        Console.WriteLine("Polling service at {0}...", StaplerServiceUrl);
                         using (HttpResponseMessage response = await client.GetAsync(StaplerServiceUrl))
                         {
                             successfulResponse = response.IsSuccessStatusCode;
@@ -164,9 +168,14 @@ namespace Stapler.Client
                     }
                 }
                 if (!successfulResponse)
-                    await Task.Delay(TimeSpan.FromSeconds(1));
-            } while (successfulResponse);
-            await Task.Delay(TimeSpan.FromSeconds(1));
+                {
+                    var pollingInterval = TimeSpan.FromSeconds(2);
+                    await Task.Delay(pollingInterval);
+                }
+            } while (!successfulResponse);
+
+            var startUpDelay = TimeSpan.FromSeconds(2);
+            await Task.Delay(startUpDelay); // HACK: Fragile! Unity seems to momentarily reload...  
             Console.WriteLine("Got success from UnityServer");
         }
 
@@ -174,12 +183,15 @@ namespace Stapler.Client
         {
             string editorFolder = Path.Combine(Path.Combine(_projectPath, "Assets"), "Editor");
             const string dll = "Stapler.UnityServer.dll";
+
             string destination = Path.Combine(editorFolder, dll);
-            if (!File.Exists(dll) || IsNewerThanDestination(dll, destination))
+            string source = Path.Combine(Assembly.GetExecutingAssembly().Location, dll);
+
+            if (File.Exists(source) || IsNewerThanDestination(source, destination))
             {
                 Directory.CreateDirectory(editorFolder);
-                Console.WriteLine("Updating {0} at {1}...", dll, destination);
-                File.Copy(dll, destination, true);
+                Console.WriteLine("Updating {0} at {1}...", source, destination);
+                File.Copy(source, destination, true);
             }
             else
             {
