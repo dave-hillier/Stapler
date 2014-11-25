@@ -3,14 +3,22 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using System.Net.Http;
 
 namespace Stapler.Client
 {
-    class Program
+    internal class Program
     {
+        private const string QuitMethod = "Stapler.UnityServer.CommandListener.Quit";
+        private const int MaxFailures = 30;
+
+        private const string UrlFormat = "http://localhost:13711/{0}/";
+
+        // TODO: UNITY_HOME environment variable
+        private static readonly string UnityExecutable = Environment.GetEnvironmentVariable("UNITY_HOME") ?? @"C:\Program Files (x86)\Unity\Editor\Unity.exe";
+
         private static bool _batchMode;
         private static bool _quit;
         private static bool _nographics;
@@ -18,18 +26,29 @@ namespace Stapler.Client
         private static string _projectPath;
         private static string _logFile;
         private static string _executeMethod;
-        private const int MaxFailures = 30;
 
-        private const string UrlFormat = "http://localhost:13711/{0}/";
-        private const string UnityExecutable = @"C:\Program Files (x86)\Unity\Editor\Unity.exe"; // TODO: UNITY_HOME environment variable
+        private static string LockFilePath
+        {
+            get { return Path.Combine(Path.Combine(_projectPath, "Temp"), "UnityLockfile"); }
+        }
+
+        private static string StaplerServiceUrl
+        {
+            get
+            {
+                string unityStylePath = _projectPath.Replace("\\", "/").TrimEnd('/');
+                string encodedPath = Base64Encode(unityStylePath);
+                return string.Format(UrlFormat, encodedPath);
+            }
+        }
 
         public static string Base64Encode(string plainText)
         {
-            var plainTextBytes = Encoding.UTF8.GetBytes(plainText);
+            byte[] plainTextBytes = Encoding.UTF8.GetBytes(plainText);
             return Convert.ToBase64String(plainTextBytes);
         }
 
-        static void ParseOptions(string[] args)
+        private static void ParseOptions(string[] args)
         {
             _batchMode = args.Contains("-batchmode");
             _quit = args.Contains("-quit");
@@ -39,12 +58,10 @@ namespace Stapler.Client
             _executeMethod = args.SkipWhile(arg => arg != "-executeMethod").Skip(1).FirstOrDefault();
         }
 
-        static IEnumerable<string> UnityOptions()
+        private static IEnumerable<string> UnityOptions()
         {
             if (_batchMode)
                 yield return "-batchmode";
-            if (_quit)
-                yield return "-quit";
             if (_nographics)
                 yield return "-nographics";
             if (!string.IsNullOrEmpty(_projectPath))
@@ -53,7 +70,8 @@ namespace Stapler.Client
                 yield return "-logFile " + _logFile;
             // Executed method is posted to the running unity
         }
-        static void Main(string[] args)
+
+        private static void Main(string[] args)
         {
             ParseOptions(args);
             if (_executeMethod == null || _projectPath == null)
@@ -62,31 +80,30 @@ namespace Stapler.Client
                 return;
             }
 
-            var result = SendOrLaunchUnity();
+            Task<bool> result = SendOrLaunchUnity();
             result.Wait();
             if (result.Result)
                 Console.WriteLine("Success");
             else
                 Console.Error.WriteLine("Failed");
-
         }
 
-        static async Task<bool> SendOrLaunchUnity()
+        private static async Task<bool> SendOrLaunchUnity()
         {
             if (!File.Exists(LockFilePath))
             {
                 Console.WriteLine("UnityLockfile not found. Running Unity...");
                 StartUnity();
             }
-            return await PostMethodToInvokeToServer();
-        }
+            bool result = await PostMethodToInvokeToServer(_executeMethod);
 
-        private static string LockFilePath
-        {
-            get
+            if (_quit)
             {
-                return Path.Combine(Path.Combine(_projectPath, "Temp"), "UnityLockfile");
+                // TODO post a quit
+                await PostMethodToInvokeToServer(QuitMethod);
             }
+
+            return result;
         }
 
         private static void StartUnity()
@@ -106,7 +123,7 @@ namespace Stapler.Client
                 {
                     using (var client = new HttpClient())
                     {
-                        using (var response = await client.GetAsync(StaplerServiceUrl))
+                        using (HttpResponseMessage response = await client.GetAsync(StaplerServiceUrl))
                         {
                             successfulResponse = response.IsSuccessStatusCode;
                         }
@@ -121,20 +138,16 @@ namespace Stapler.Client
                 }
                 if (!successfulResponse)
                     await Task.Delay(TimeSpan.FromSeconds(1));
-
             } while (successfulResponse);
             await Task.Delay(TimeSpan.FromSeconds(1));
             Console.WriteLine("Got success from UnityServer");
         }
 
-
-
-
         private static void EnsureServerDllExists()
         {
-            var editorFolder = Path.Combine(Path.Combine(_projectPath, "Assets"), "Editor");
+            string editorFolder = Path.Combine(Path.Combine(_projectPath, "Assets"), "Editor");
             const string dll = "Stapler.UnityServer.dll";
-            var destination = Path.Combine(editorFolder, dll);
+            string destination = Path.Combine(editorFolder, dll);
             if (File.Exists(dll) && IsNewerThanDestination(dll, destination))
             {
                 Directory.CreateDirectory(editorFolder);
@@ -152,19 +165,23 @@ namespace Stapler.Client
             return File.GetLastWriteTimeUtc(dll) > File.GetLastWriteTimeUtc(Path.Combine(destFolder, dll));
         }
 
-        private static async Task<bool> PostMethodToInvokeToServer()
+        private static async Task<bool> PostMethodToInvokeToServer(string executeMethod)
         {
             using (var client = new HttpClient())
             {
                 try
                 {
-                    using (var response = await client.PostAsync(StaplerServiceUrl, new StringContent(_executeMethod)))
+                    using (
+                        HttpResponseMessage response =
+                            await client.PostAsync(StaplerServiceUrl, new StringContent(executeMethod)))
                     {
                         if (response.IsSuccessStatusCode)
                         {
                             return await HandleResponse(response);
                         }
                         Console.WriteLine("Error. UnityServer returned: {0}", response.ReasonPhrase);
+                        Console.WriteLine(
+                            "Ensure that UnityServer is running and that there are no suprious UnityLockfiles in you project.");
                         return false;
                     }
                 }
@@ -176,19 +193,9 @@ namespace Stapler.Client
             return false;
         }
 
-        private static string StaplerServiceUrl
-        {
-            get
-            {
-                var unityStylePath = _projectPath.Replace("\\", "/").TrimEnd('/');
-                var encodedPath = Base64Encode(unityStylePath);
-                return string.Format(UrlFormat, encodedPath);
-            }
-        }
-
         private static async Task<bool> HandleResponse(HttpResponseMessage response)
         {
-            using (var content = response.Content)
+            using (HttpContent content = response.Content)
             {
                 string result = await content.ReadAsStringAsync();
                 if (result != null)
@@ -202,11 +209,9 @@ namespace Stapler.Client
 
         private static void InvokeUnity()
         {
-            var args = string.Join(" ", UnityOptions().ToArray());
+            string args = string.Join(" ", UnityOptions().ToArray());
             Console.WriteLine("{0} {1}", UnityExecutable, args);
             Process.Start(UnityExecutable, args);
         }
     }
-
-
 }

@@ -30,6 +30,11 @@ namespace Stapler.UnityServer
             }
         }
 
+        public static void Quit()
+        {
+            EditorApplication.Exit(0);
+        }
+
         static CommandListener()
         {
             
@@ -121,7 +126,6 @@ namespace Stapler.UnityServer
                         string responseString = "<html><body>" +
                             string.Join("\n", LogMessages.Select(m => m.ToString()).ToArray())
                             +"</body></html>";
-                        Debug.LogWarning("responseString: " + responseString);
                         WriteResponseString(response, output, responseString);
                         break;
                 }
