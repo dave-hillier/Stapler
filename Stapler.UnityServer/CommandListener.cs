@@ -15,58 +15,83 @@ namespace Stapler.UnityServer
     [InitializeOnLoad]
     internal class CommandListener
     {
-        private static HttpListener _listener;
-        private static readonly Queue<string> InvokeQueue = new Queue<string>();
-        private static readonly List<LogEntry> LogMessages = new List<LogEntry>();
-        private static readonly AutoResetEvent Evt = new AutoResetEvent(false);
-        private static bool _quit;
-        private static readonly DateTime Started;
+        private static HttpListener listener;
+        private static readonly Queue<AsyncCommand> COMMAND_QUEUE = new Queue<AsyncCommand>();
+        private static bool quitWhenQueueEmpty;
+        private static readonly DateTime SERVICE_START_TIME;
 
         static CommandListener()
         {
-            Started = DateTime.UtcNow;
+            SERVICE_START_TIME = DateTime.UtcNow;
             EditorApplication.update += ProcessWorkQueue;
         }
 
         public static void Quit()
         {
-            _quit = InternalEditorUtility.inBatchMode;
+            quitWhenQueueEmpty = InternalEditorUtility.inBatchMode;
+        }
+
+        public static void LogTest()
+        {
+            Debug.Log("Level: 'LogMessage'");
+            Debug.LogWarning("Level: 'Warning'");
+            Debug.LogError("Level: 'Error'");
+        }
+
+        public static void ThrowTest()
+        {
+            throw new Exception("Test exception");
         }
 
         private static void ProcessWorkQueue()
         {
-            if (_listener == null) // Wait to initialize the listener so that we're loaded?
+            if (listener == null) // Wait to initialize the listener so that we're loaded?
             {
-                _listener = new HttpListener();
+                listener = new HttpListener();
                 StartServer();
             }
 
-            lock (InvokeQueue)
+            AsyncCommand command = null;
+            lock (COMMAND_QUEUE)
             {
-                if (InvokeQueue.Count > 0)
+                if (COMMAND_QUEUE.Count > 0)
                 {
-                    string method = InvokeQueue.Dequeue();
-                    InvokeWithLogHandler(method);
-                    Evt.Set();
+                    command = COMMAND_QUEUE.Dequeue();
                 }
-                if (_quit) // Is in batchmode?
+            }
+
+            if (command != null)
+            {
+                InvokeWithLogHandler(command);
+                command.CommandProcessed.Set();
+            }
+
+            lock (COMMAND_QUEUE)
+            {
+                if (COMMAND_QUEUE.Count == 0 && quitWhenQueueEmpty)
                 {
                     EditorApplication.Exit(0);
                 }
             }
         }
 
-        private static void InvokeWithLogHandler(string method)
+        private static void InvokeWithLogHandler(AsyncCommand command)
         {
-            LogMessages.Clear();
-            Application.RegisterLogCallback(HandleLog);
-            InvokeMethodFromName(method);
+            command.LogMessages.Clear();
+            Application.RegisterLogCallback((condition, stacktrace, logType) => HandleLog(command, condition, logType));
+            bool success = InvokeMethodFromName(command.Method);
             Application.RegisterLogCallback(null);
+            command.ResultCode = success && !LogHasErrors(command) ? 200 : 500;
         }
 
-        private static void HandleLog(string condition, string stacktrace, LogType type)
+        private static bool LogHasErrors(AsyncCommand command)
         {
-            LogMessages.Add(new LogEntry {Condition = condition, Stacktrace = stacktrace, Type = type});
+            return command.LogMessages.Any(e => e.Type == LogType.Error || e.Type == LogType.Assert || e.Type == LogType.Exception);
+        }
+
+        private static void HandleLog(AsyncCommand command, string condition, LogType type)
+        {
+            command.LogMessages.Add(new LogEntry { Condition = condition, Type = type });
         }
 
         public static string Base64Encode(string plainText)
@@ -80,14 +105,14 @@ namespace Stapler.UnityServer
             string plainText = Path.GetDirectoryName(Application.dataPath);
             string prefix = string.Format("http://*:13711/{0}/", Base64Encode(plainText));
             Debug.Log(string.Format("Starting Listener: {0} for \"{1}\"", prefix, plainText));
-            _listener.Prefixes.Add(prefix);
-            _listener.Start();
+            listener.Prefixes.Add(prefix);
+            listener.Start();
 
             ThreadPool.QueueUserWorkItem(o =>
             {
-                while (_listener.IsListening)
+                while (listener.IsListening)
                 {
-                    ThreadPool.QueueUserWorkItem(HandleRequest, _listener.GetContext());
+                    ThreadPool.QueueUserWorkItem(HandleRequest, listener.GetContext());
                 }
             });
         }
@@ -101,67 +126,87 @@ namespace Stapler.UnityServer
             }
 
             HttpListenerResponse response = ctx.Response;
+
             using (Stream output = response.OutputStream)
             {
                 switch (ctx.Request.HttpMethod)
                 {
                     case "GET":
-                        string statusResponse =
-                            string.Format(
-                                "<!doctype html><html lang=\"en\"><body><h1>status</h1><p/>Running: {0}s</body></html>",
-                                (DateTime.UtcNow - Started).TotalSeconds); // TODO: unity settings
-                        WriteResponseString(response, output, statusResponse);
+                        HandleGet(response, output);
                         break;
                     case "POST":
-                        Stream istream = ctx.Request.InputStream;
-                        using (var read = new StreamReader(istream))
-                        {
-                            string fullyQualifiedTypeAndMethodName = read.ReadToEnd();
-                            lock (InvokeQueue)
-                            {
-                                InvokeQueue.Enqueue(fullyQualifiedTypeAndMethodName);
-                            }
-                        }
-                        Evt.WaitOne();
-
-                        string responseString = "<!doctype html><html lang=\"en\"><body>" +
-                                                string.Join("\n", LogMessages.Select(m => m.ToString()).ToArray())
-                                                + "</body></html>";
-                        WriteResponseString(response, output, responseString);
+                        HandlePost(ctx, response, output);
                         break;
                 }
             }
         }
 
-        private static void InvokeMethodFromName(string fullyQualifiedTypeAndMethodName)
+        private static void HandleGet(HttpListenerResponse response, Stream output)
+        {
+            string statusResponse = string.Format("<!doctype html><html lang=\"en\"><body><h1>Response Status:</h1><p/>Running: {0}s</body></html>", (DateTime.UtcNow - SERVICE_START_TIME).TotalSeconds); // TODO: unity settings
+            WriteResponseString(response, output, statusResponse);
+        }
+
+        private static void HandlePost(HttpListenerContext ctx, HttpListenerResponse response, Stream output)
+        {
+            AsyncCommand command = CreateCommandFromRequest(ctx);
+            lock (COMMAND_QUEUE)
+            {
+                COMMAND_QUEUE.Enqueue(command);
+            }
+            command.CommandProcessed.WaitOne();
+            ctx.Response.StatusCode = command.ResultCode;
+            WriteResponseString(response, output, command.GetResultBody());
+        }
+
+        private static AsyncCommand CreateCommandFromRequest(HttpListenerContext ctx)
+        {
+            Stream istream = ctx.Request.InputStream;
+            using (var read = new StreamReader(istream))
+            {
+                string fullyQualifiedTypeAndMethodName = read.ReadToEnd();
+                return new AsyncCommand(fullyQualifiedTypeAndMethodName);
+            }
+        }
+
+        private static bool InvokeMethodFromName(string fullyQualifiedTypeAndMethodName)
         {
             Debug.Log(string.Format("Invoking {0}... ", fullyQualifiedTypeAndMethodName));
             string[] parts = fullyQualifiedTypeAndMethodName.Split('.');
             string typeName = string.Join(".", parts.Take(parts.Length - 1).ToArray());
 
-            Type type = (from asm in AppDomain.CurrentDomain.GetAssemblies()
-                let ype = asm.GetType(typeName)
-                where ype != null
-                select ype).SingleOrDefault();
+            Type type = GetTypeFromLoadedAssemblies(typeName);
             if (type != null)
             {
-                string methodName = parts.Last();
-                MethodInfo method = type.GetMethod(methodName);
-                try
-                {
-                    method.Invoke(null, null);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning(string.Format("Failed to invoke {0}. Exception thrown.",
-                        fullyQualifiedTypeAndMethodName));
-                    Debug.LogException(ex);
-                }
+                return InvokeMethod(fullyQualifiedTypeAndMethodName, parts, type);
             }
-            else
+            Debug.LogWarning(string.Format("Failed to find method named {0}", fullyQualifiedTypeAndMethodName));
+            return false;
+        }
+
+        private static bool InvokeMethod(string fullyQualifiedTypeAndMethodName, IEnumerable<string> nameSpaceParts, Type type)
+        {
+            string methodName = nameSpaceParts.Last();
+            MethodInfo method = type.GetMethod(methodName);
+            try
             {
-                Debug.LogWarning(string.Format("Failed to find method named {0}", fullyQualifiedTypeAndMethodName));
+                method.Invoke(null, null);
             }
+            catch (Exception ex)
+            {
+                Debug.LogWarning(string.Format("Failed to invoke {0}. Exception thrown.", fullyQualifiedTypeAndMethodName));
+                Debug.LogException(ex);
+                return false;
+            }
+            return true;
+        }
+
+        private static Type GetTypeFromLoadedAssemblies(string typeName)
+        {
+            return (from asm in AppDomain.CurrentDomain.GetAssemblies()
+                    let ype = asm.GetType(typeName)
+                    where ype != null
+                    select ype).SingleOrDefault();
         }
 
         private static void WriteResponseString(HttpListenerResponse response, Stream output, string responseString)
@@ -171,10 +216,28 @@ namespace Stapler.UnityServer
             output.Write(buffer, 0, buffer.Length);
         }
 
+        private class AsyncCommand
+        {
+            public readonly AutoResetEvent CommandProcessed = new AutoResetEvent(false);
+
+            public readonly List<LogEntry> LogMessages = new List<LogEntry>();
+            public readonly string Method;
+            public int ResultCode;
+
+            public AsyncCommand(string method)
+            {
+                Method = method;
+            }
+
+            public string GetResultBody()
+            {
+                return "<!doctype html><html lang=\"en\"><body>" + string.Join("\n", LogMessages.Select(m => m.ToString()).ToArray()) + "</body></html>";
+            }
+        }
+
         private struct LogEntry
         {
             public string Condition;
-            public string Stacktrace;
             public LogType Type;
 
             public override string ToString()
